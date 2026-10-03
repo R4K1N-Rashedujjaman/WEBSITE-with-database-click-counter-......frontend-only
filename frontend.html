@@ -1,0 +1,854 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Omni Counter</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      background-color: #f8fafc;
+      color: #0f172a;
+      font-family: system-ui, -apple-system, sans-serif;
+      display: flex;
+      justify-content: center;
+      padding: 24px 16px;
+      margin: 0;
+      min-height: 100vh;
+    }
+    .card {
+      width: 100%;
+      max-width: 440px;
+      background: #ffffff;
+      border: 1px solid #e2e8f0;
+      border-radius: 24px;
+      padding: 24px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.06);
+    }
+    #toastContainer {
+      position: fixed;
+      top: 16px;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      z-index: 9999;
+      width: 90%;
+      max-width: 380px;
+      pointer-events: none;
+    }
+    .toast {
+      padding: 12px 16px;
+      border-radius: 12px;
+      font-size: 14px;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      box-shadow: 0 8px 16px rgba(0,0,0,0.1);
+      animation: popIn 0.2s ease forwards;
+    }
+    .toast-error { background: #fee2e2; color: #991b1b; border: 1px solid #f87171; }
+    .toast-success { background: #dcfce7; color: #166534; border: 1px solid #4ade80; }
+    .toast-info { background: #e0f2fe; color: #075985; border: 1px solid #38bdf8; }
+    @keyframes popIn { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
+
+    input, select {
+      width: 100%;
+      padding: 13px;
+      font-size: 15px;
+      border: 1.5px solid #cbd5e1;
+      border-radius: 12px;
+      margin-bottom: 12px;
+      outline: none;
+      background: #f8fafc;
+    }
+    input:focus, select:focus { border-color: #f43f5e; background: #fff; }
+
+    .counter-display {
+      font-size: clamp(36px, 8vw, 60px);
+      font-weight: 900;
+      text-align: center;
+      margin: 14px 0;
+      word-break: break-all;
+      line-height: 1.1;
+      user-select: none;
+      transition: transform 0.05s ease;
+    }
+    .counter-pop { transform: scale(1.12); color: #f43f5e; }
+
+    .btn-red {
+      width: 100%;
+      padding: 18px;
+      font-size: 20px;
+      font-weight: 800;
+      color: #fff;
+      background: linear-gradient(135deg, #fb7185, #e11d48);
+      border: none;
+      border-radius: 9999px;
+      cursor: pointer;
+      user-select: none;
+      box-shadow: 0 8px 22px rgba(225,29,72,0.35);
+      transition: transform 0.05s ease;
+    }
+    .btn-red:active { transform: scale(0.96); }
+
+    .btn-primary {
+      width: 100%;
+      padding: 13px;
+      background: #0f172a;
+      color: #fff;
+      border-radius: 12px;
+      border: none;
+      font-size: 15px;
+      font-weight: 700;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+    .btn-primary:disabled { opacity: 0.6; cursor: not-allowed; }
+
+    .btn-secondary {
+      width: 100%;
+      padding: 11px;
+      background: #f1f5f9;
+      color: #334155;
+      border-radius: 12px;
+      border: none;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      margin-top: 8px;
+    }
+    .btn-text {
+      background: none;
+      border: none;
+      color: #94a3b8;
+      font-size: 13px;
+      cursor: pointer;
+      margin-top: 14px;
+      text-decoration: underline;
+      display: block;
+      width: 100%;
+    }
+    .hidden { display: none !important; }
+
+    /* Modal */
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(15, 23, 42, 0.6);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      backdrop-filter: blur(4px);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.2s ease;
+      z-index: 1000;
+    }
+    .modal-overlay.active { opacity: 1; pointer-events: auto; }
+    .modal {
+      background: #fff;
+      width: 90%;
+      max-width: 340px;
+      border-radius: 20px;
+      padding: 24px;
+      text-align: center;
+    }
+    .modal-actions { display: flex; gap: 8px; margin-top: 16px; }
+    .modal-actions button {
+      flex: 1;
+      padding: 12px;
+      border-radius: 10px;
+      font-weight: 700;
+      border: none;
+      cursor: pointer;
+    }
+
+    ol { padding-left: 20px; word-break: break-all; }
+    li { margin-bottom: 8px; font-size: 14px; }
+  </style>
+</head>
+<body>
+
+<div id="toastContainer"></div>
+
+<div class="card">
+  <!-- AUTH SECTION -->
+  <div id="authSection">
+    <h2 id="authTitle" style="margin:0 0 16px;">✨ Account Access</h2>
+    
+    <!-- Login Mode -->
+    <div id="loginGroup" class="hidden">
+      <input type="text" id="loginIdInput" placeholder="👤 Username or ✉️ Email" />
+      <input type="password" id="loginPassInput" placeholder="🔒 Password" />
+      <button class="btn-primary" id="loginBtn" onclick="login()">🔑 Login</button>
+      <button class="btn-secondary" onclick="toggleAuth(false)">Need an account? Sign Up</button>
+    </div>
+
+    <!-- Sign Up Mode -->
+    <div id="signupGroup">
+      <input type="text" id="regUsernameInput" placeholder="👤 Unique Username" />
+      <input type="email" id="regEmailInput" placeholder="✉️ Email Address" />
+      <input type="password" id="regPassInput" placeholder="🔒 Create Password" />
+      
+      <select id="countrySelect">
+<option value="🇦🇫">🇦🇫 Afghanistan</option>
+<option value="🇦🇱">🇦🇱 Albania</option>
+<option value="🇩🇿">🇩🇿 Algeria</option>
+<option value="🇦🇸">🇦🇸 American Samoa</option>
+<option value="🇦🇩">🇦🇩 Andorra</option>
+<option value="🇦🇴">🇦🇴 Angola</option>
+<option value="🇦🇮">🇦🇮 Anguilla</option>
+<option value="🇦🇶">🇦🇶 Antarctica</option>
+<option value="🇦🇬">🇦🇬 Antigua and Barbuda</option>
+<option value="🇦🇷">🇦🇷 Argentina</option>
+<option value="🇦🇲">🇦🇲 Armenia</option>
+<option value="🇦🇼">🇦🇼 Aruba</option>
+<option value="🇦🇺">🇦🇺 Australia</option>
+<option value="🇦🇹">🇦🇹 Austria</option>
+<option value="🇦🇿">🇦🇿 Azerbaijan</option>
+
+<option value="🇧🇸">🇧🇸 Bahamas</option>
+<option value="🇧🇭">🇧🇭 Bahrain</option>
+<option value="🇧🇩">🇧🇩 Bangladesh</option>
+<option value="🇧🇧">🇧🇧 Barbados</option>
+<option value="🇧🇾">🇧🇾 Belarus</option>
+<option value="🇧🇪">🇧🇪 Belgium</option>
+<option value="🇧🇿">🇧🇿 Belize</option>
+<option value="🇧🇯">🇧🇯 Benin</option>
+<option value="🇧🇲">🇧🇲 Bermuda</option>
+<option value="🇧🇹">🇧🇹 Bhutan</option>
+<option value="🇧🇴">🇧🇴 Bolivia</option>
+<option value="🇧🇦">🇧🇦 Bosnia and Herzegovina</option>
+<option value="🇧🇼">🇧🇼 Botswana</option>
+<option value="🇧🇻">🇧🇻 Bouvet Island</option>
+<option value="🇧🇷">🇧🇷 Brazil</option>
+<option value="🇮🇴">🇮🇴 British Indian Ocean Territory</option>
+<option value="🇧🇳">🇧🇳 Brunei</option>
+<option value="🇧🇬">🇧🇬 Bulgaria</option>
+<option value="🇧🇫">🇧🇫 Burkina Faso</option>
+<option value="🇧🇮">🇧🇮 Burundi</option>
+
+<option value="🇨🇻">🇨🇻 Cabo Verde</option>
+<option value="🇰🇭">🇰🇭 Cambodia</option>
+<option value="🇨🇲">🇨🇲 Cameroon</option>
+<option value="🇨🇦">🇨🇦 Canada</option>
+<option value="🇰🇾">🇰🇾 Cayman Islands</option>
+<option value="🇨🇫">🇨🇫 Central African Republic</option>
+<option value="🇹🇩">🇹🇩 Chad</option>
+<option value="🇨🇱">🇨🇱 Chile</option>
+<option value="🇨🇳">🇨🇳 China</option>
+<option value="🇨🇽">🇨🇽 Christmas Island</option>
+<option value="🇨🇨">🇨🇨 Cocos (Keeling) Islands</option>
+<option value="🇨🇴">🇨🇴 Colombia</option>
+<option value="🇰🇲">🇰🇲 Comoros</option>
+<option value="🇨🇬">🇨🇬 Congo</option>
+<option value="🇨🇩">🇨🇩 Congo, Democratic Republic of the</option>
+<option value="🇨🇰">🇨🇰 Cook Islands</option>
+<option value="🇨🇷">🇨🇷 Costa Rica</option>
+<option value="🇨🇮">🇨🇮 Côte d'Ivoire</option>
+<option value="🇭🇷">🇭🇷 Croatia</option>
+<option value="🇨🇺">🇨🇺 Cuba</option>
+<option value="🇨🇼">🇨🇼 Curaçao</option>
+<option value="🇨🇾">🇨🇾 Cyprus</option>
+<option value="🇨🇿">🇨🇿 Czechia</option>
+
+<option value="🇩🇰">🇩🇰 Denmark</option>
+<option value="🇩🇯">🇩🇯 Djibouti</option>
+<option value="🇩🇲">🇩🇲 Dominica</option>
+<option value="🇩🇴">🇩🇴 Dominican Republic</option>
+
+<option value="🇪🇨">🇪🇨 Ecuador</option>
+<option value="🇪🇬">🇪🇬 Egypt</option>
+<option value="🇸🇻">🇸🇻 El Salvador</option>
+<option value="🇬🇶">🇬🇶 Equatorial Guinea</option>
+<option value="🇪🇷">🇪🇷 Eritrea</option>
+<option value="🇪🇪">🇪🇪 Estonia</option>
+<option value="🇸🇿">🇸🇿 Eswatini</option>
+<option value="🇪🇹">🇪🇹 Ethiopia</option>
+
+<option value="🇫🇰">🇫🇰 Falkland Islands</option>
+<option value="🇫🇴">🇫🇴 Faroe Islands</option>
+<option value="🇫🇯">🇫🇯 Fiji</option>
+<option value="🇫🇮">🇫🇮 Finland</option>
+<option value="🇫🇷">🇫🇷 France</option>
+<option value="🇬🇫">🇬🇫 French Guiana</option>
+<option value="🇵🇫">🇵🇫 French Polynesia</option>
+<option value="🇹🇫">🇹🇫 French Southern Territories</option>
+
+<option value="🇬🇦">🇬🇦 Gabon</option>
+<option value="🇬🇲">🇬🇲 Gambia</option>
+<option value="🇬🇪">🇬🇪 Georgia</option>
+<option value="🇩🇪">🇩🇪 Germany</option>
+<option value="🇬🇭">🇬🇭 Ghana</option>
+<option value="🇬🇮">🇬🇮 Gibraltar</option>
+<option value="🇬🇷">🇬🇷 Greece</option>
+<option value="🇬🇱">🇬🇱 Greenland</option>
+<option value="🇬🇩">🇬🇩 Grenada</option>
+<option value="🇬🇵">🇬🇵 Guadeloupe</option>
+<option value="🇬🇺">🇬🇺 Guam</option>
+<option value="🇬🇹">🇬🇹 Guatemala</option>
+<option value="🇬🇬">🇬🇬 Guernsey</option>
+<option value="🇬🇳">🇬🇳 Guinea</option>
+<option value="🇬🇼">🇬🇼 Guinea-Bissau</option>
+<option value="🇬🇾">🇬🇾 Guyana</option>
+
+<option value="🇭🇹">🇭🇹 Haiti</option>
+<option value="🇭🇲">🇭🇲 Heard Island and McDonald Islands</option>
+<option value="🇻🇦">🇻🇦 Holy See / Vatican City</option>
+<option value="🇭🇳">🇭🇳 Honduras</option>
+<option value="🇭🇰">🇭🇰 Hong Kong</option>
+<option value="🇭🇺">🇭🇺 Hungary</option>
+
+<option value="🇮🇸">🇮🇸 Iceland</option>
+<option value="🇮🇳">🇮🇳 India</option>
+<option value="🇮🇩">🇮🇩 Indonesia</option>
+<option value="🇮🇷">🇮🇷 Iran</option>
+<option value="🇮🇶">🇮🇶 Iraq</option>
+<option value="🇮🇪">🇮🇪 Ireland</option>
+<option value="🇮🇲">🇮🇲 Isle of Man</option>
+<option value="🇮🇱">🇮🇱 Israel</option>
+<option value="🇮🇹">🇮🇹 Italy</option>
+
+<option value="🇯🇲">🇯🇲 Jamaica</option>
+<option value="🇯🇵">🇯🇵 Japan</option>
+<option value="🇯🇪">🇯🇪 Jersey</option>
+<option value="🇯🇴">🇯🇴 Jordan</option>
+
+<option value="🇰🇿">🇰🇿 Kazakhstan</option>
+<option value="🇰🇪">🇰🇪 Kenya</option>
+<option value="🇰🇮">🇰🇮 Kiribati</option>
+<option value="🇰🇵">🇰🇵 North Korea</option>
+<option value="🇰🇷">🇰🇷 South Korea</option>
+<option value="🇽🇰">🇽🇰 Kosovo</option>
+<option value="🇰🇼">🇰🇼 Kuwait</option>
+<option value="🇰🇬">🇰🇬 Kyrgyzstan</option>
+
+<option value="🇱🇦">🇱🇦 Laos</option>
+<option value="🇱🇻">🇱🇻 Latvia</option>
+<option value="🇱🇧">🇱🇧 Lebanon</option>
+<option value="🇱🇸">🇱🇸 Lesotho</option>
+<option value="🇱🇷">🇱🇷 Liberia</option>
+<option value="🇱🇾">🇱🇾 Libya</option>
+<option value="🇱🇮">🇱🇮 Liechtenstein</option>
+<option value="🇱🇹">🇱🇹 Lithuania</option>
+<option value="🇱🇺">🇱🇺 Luxembourg</option>
+<option value="🇲🇴">🇲🇴 Macao</option>
+
+<option value="🇲🇬">🇲🇬 Madagascar</option>
+<option value="🇲🇼">🇲🇼 Malawi</option>
+<option value="🇲🇾">🇲🇾 Malaysia</option>
+<option value="🇲🇻">🇲🇻 Maldives</option>
+<option value="🇲🇱">🇲🇱 Mali</option>
+<option value="🇲🇹">🇲🇹 Malta</option>
+<option value="🇲🇭">🇲🇭 Marshall Islands</option>
+<option value="🇲🇶">🇲🇶 Martinique</option>
+<option value="🇲🇷">🇲🇷 Mauritania</option>
+<option value="🇲🇺">🇲🇺 Mauritius</option>
+<option value="🇾🇹">🇾🇹 Mayotte</option>
+<option value="🇲🇽">🇲🇽 Mexico</option>
+<option value="🇫🇲">🇫🇲 Micronesia</option>
+<option value="🇲🇩">🇲🇩 Moldova</option>
+<option value="🇲🇨">🇲🇨 Monaco</option>
+<option value="🇲🇳">🇲🇳 Mongolia</option>
+<option value="🇲🇪">🇲🇪 Montenegro</option>
+<option value="🇲🇸">🇲🇸 Montserrat</option>
+<option value="🇲🇦">🇲🇦 Morocco</option>
+<option value="🇲🇿">🇲🇿 Mozambique</option>
+<option value="🇲🇲">🇲🇲 Myanmar</option>
+
+<option value="🇳🇦">🇳🇦 Namibia</option>
+<option value="🇳🇷">🇳🇷 Nauru</option>
+<option value="🇳🇵">🇳🇵 Nepal</option>
+<option value="🇳🇱">🇳🇱 Netherlands</option>
+<option value="🇳🇨">🇳🇨 New Caledonia</option>
+<option value="🇳🇿">🇳🇿 New Zealand</option>
+<option value="🇳🇮">🇳🇮 Nicaragua</option>
+<option value="🇳🇪">🇳🇪 Niger</option>
+<option value="🇳🇬">🇳🇬 Nigeria</option>
+<option value="🇳🇺">🇳🇺 Niue</option>
+<option value="🇳🇫">🇳🇫 Norfolk Island</option>
+<option value="🇲🇰">🇲🇰 North Macedonia</option>
+<option value="🇲🇵">🇲🇵 Northern Mariana Islands</option>
+<option value="🇳🇴">🇳🇴 Norway</option>
+
+<option value="🇴🇲">🇴🇲 Oman</option>
+
+<option value="🇵🇰">🇵🇰 Pakistan</option>
+<option value="🇵🇼">🇵🇼 Palau</option>
+<option value="🇵🇸">🇵🇸 Palestine</option>
+<option value="🇵🇦">🇵🇦 Panama</option>
+<option value="🇵🇬">🇵🇬 Papua New Guinea</option>
+<option value="🇵🇾">🇵🇾 Paraguay</option>
+<option value="🇵🇪">🇵🇪 Peru</option>
+<option value="🇵🇭">🇵🇭 Philippines</option>
+<option value="🇵🇳">🇵🇳 Pitcairn</option>
+<option value="🇵🇱">🇵🇱 Poland</option>
+<option value="🇵🇹">🇵🇹 Portugal</option>
+<option value="🇵🇷">🇵🇷 Puerto Rico</option>
+
+<option value="🇶🇦">🇶🇦 Qatar</option>
+
+<option value="🇷🇪">🇷🇪 Réunion</option>
+<option value="🇷🇴">🇷🇴 Romania</option>
+<option value="🇷🇺">🇷🇺 Russia</option>
+<option value="🇷🇼">🇷🇼 Rwanda</option>
+
+<option value="🇧🇱">🇧🇱 Saint Barthélemy</option>
+<option value="🇸🇭">🇸🇭 Saint Helena</option>
+<option value="🇰🇳">🇰🇳 Saint Kitts and Nevis</option>
+<option value="🇱🇨">🇱🇨 Saint Lucia</option>
+<option value="🇲🇫">🇲🇫 Saint Martin</option>
+<option value="🇵🇲">🇵🇲 Saint Pierre and Miquelon</option>
+<option value="🇻🇨">🇻🇨 Saint Vincent and the Grenadines</option>
+<option value="🇼🇸">🇼🇸 Samoa</option>
+<option value="🇸🇲">🇸🇲 San Marino</option>
+<option value="🇸🇹">🇸🇹 São Tomé and Príncipe</option>
+<option value="🇸🇦">🇸🇦 Saudi Arabia</option>
+<option value="🇸🇳">🇸🇳 Senegal</option>
+<option value="🇷🇸">🇷🇸 Serbia</option>
+<option value="🇸🇨">🇸🇨 Seychelles</option>
+<option value="🇸🇱">🇸🇱 Sierra Leone</option>
+<option value="🇸🇬">🇸🇬 Singapore</option>
+<option value="🇸🇽">🇸🇽 Sint Maarten</option>
+<option value="🇸🇰">🇸🇰 Slovakia</option>
+<option value="🇸🇮">🇸🇮 Slovenia</option>
+<option value="🇸🇧">🇸🇧 Solomon Islands</option>
+<option value="🇸🇴">🇸🇴 Somalia</option>
+<option value="🇿🇦">🇿🇦 South Africa</option>
+<option value="🇬🇸">🇬🇸 South Georgia and the South Sandwich Islands</option>
+<option value="🇸🇸">🇸🇸 South Sudan</option>
+<option value="🇪🇸">🇪🇸 Spain</option>
+<option value="🇱🇰">🇱🇰 Sri Lanka</option>
+<option value="🇸🇩">🇸🇩 Sudan</option>
+<option value="🇸🇷">🇸🇷 Suriname</option>
+<option value="🇸🇯">🇸🇯 Svalbard and Jan Mayen</option>
+<option value="🇸🇪">🇸🇪 Sweden</option>
+<option value="🇨🇭">🇨🇭 Switzerland</option>
+<option value="🇸🇾">🇸🇾 Syria</option>
+
+<option value="🇹🇼">🇹🇼 Taiwan</option>
+<option value="🇹🇯">🇹🇯 Tajikistan</option>
+<option value="🇹🇿">🇹🇿 Tanzania</option>
+<option value="🇹🇭">🇹🇭 Thailand</option>
+<option value="🇹🇱">🇹🇱 Timor-Leste</option>
+<option value="🇹🇬">🇹🇬 Togo</option>
+<option value="🇹🇰">🇹🇰 Tokelau</option>
+<option value="🇹🇴">🇹🇴 Tonga</option>
+<option value="🇹🇹">🇹🇹 Trinidad and Tobago</option>
+<option value="🇹🇳">🇹🇳 Tunisia</option>
+<option value="🇹🇷">🇹🇷 Türkiye</option>
+<option value="🇹🇲">🇹🇲 Turkmenistan</option>
+<option value="🇹🇨">🇹🇨 Turks and Caicos Islands</option>
+<option value="🇹🇻">🇹🇻 Tuvalu</option>
+
+<option value="🇺🇬">🇺🇬 Uganda</option>
+<option value="🇺🇦">🇺🇦 Ukraine</option>
+<option value="🇦🇪">🇦🇪 United Arab Emirates</option>
+<option value="🇬🇧">🇬🇧 United Kingdom</option>
+<option value="🇺🇸">🇺🇸 United States</option>
+<option value="🇺🇲">🇺🇲 United States Minor Outlying Islands</option>
+<option value="🇺🇾">🇺🇾 Uruguay</option>
+<option value="🇺🇿">🇺🇿 Uzbekistan</option>
+
+<option value="🇻🇺">🇻🇺 Vanuatu</option>
+<option value="🇻🇪">🇻🇪 Venezuela</option>
+<option value="🇻🇳">🇻🇳 Vietnam</option>
+<option value="🇻🇬">🇻🇬 Virgin Islands, British</option>
+<option value="🇻🇮">🇻🇮 Virgin Islands, U.S.</option>
+
+<option value="🇼🇫">🇼🇫 Wallis and Futuna</option>
+<option value="🇪🇭">🇪🇭 Western Sahara</option>
+
+<option value="🇾🇪">🇾🇪 Yemen</option>
+
+<option value="🇿🇲">🇿🇲 Zambia</option>
+<option value="🇿🇼">🇿🇼 Zimbabwe</option>
+<option value="🌐" selected>🌐 Other</option>
+      </select>
+      <button class="btn-primary" id="regBtn" onclick="register()">🚀 Sign Up</button>
+      <button class="btn-secondary" onclick="toggleAuth(true)">Already have an account? Login</button>
+    </div>
+
+    <button class="btn-secondary" onclick="enterAsGuest()">👤 Play as Guest</button>
+  </div>
+
+  <!-- VERIFICATION SECTION -->
+  <div id="verifySection" class="hidden">
+    <h2 style="margin:0 0 10px;">✉️ Verify Email</h2>
+    <p style="color:#64748b; font-size:14px; margin-bottom:16px;">
+      Enter the 6-digit verification code sent to your email.
+    </p>
+    <input type="text" id="codeInput" maxlength="8" placeholder="123456" style="text-align:center; font-size:22px; letter-spacing:6px; font-weight:bold;" />
+<button class="btn-primary" id="verifyBtn" onclick="verifyCode()">✅ Verify & Play</button>
+    <button class="btn-secondary" id="resendBtn" onclick="resendCode()">🔄 Resend Code</button>
+    <button class="btn-secondary" onclick="backToRegister()">Back to Registration</button>
+  </div>
+
+  <!-- MAIN APP -->
+  <div id="appSection" class="hidden">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+      <div>
+        <span id="userFlag" style="font-size:18px;"></span> <b id="currentUser"></b>
+      </div>
+      <a href="#" onclick="logout()" style="color:#94a3b8; font-size:13px; text-decoration:none; font-weight:600;">Exit</a>
+    </div>
+    
+    <div class="counter-display" id="counter">0</div>
+    
+    <button class="btn-red" id="clickBtn" onclick="handleClick()">⚡ Click Me</button>
+    <button class="btn-text" onclick="openResetModal()">Reset Count</button>
+
+    <hr style="margin: 20px 0 14px; border: 0; border-top: 1px solid #f1f5f9;" />
+
+    <h3 style="margin:0 0 8px;">🏆 Live Leaderboard</h3>
+    <ol id="rankingList"></ol>
+  </div>
+</div>
+
+<!-- WARNING MODAL -->
+<div class="modal-overlay" id="modalOverlay">
+  <div class="modal">
+    <h3 id="modalTitle" style="color:#e11d48; margin-top:0;">⚠️ Warning (1/3)</h3>
+    <p id="modalDesc" style="color:#64748b; font-size:14px;">Reset your score to zero?</p>
+    <div class="modal-actions">
+      <button style="background:#f1f5f9; color:#334155;" onclick="closeResetModal()">Cancel</button>
+      <button style="background:#e11d48; color:#fff;" id="modalConfirmBtn" onclick="nextWarning()">Continue</button>
+    </div>
+  </div>
+</div>
+
+<!-- BANNED MODAL -->
+<div class="modal-overlay" id="banOverlay">
+  <div class="modal" style="border: 2px solid #e11d48;">
+    <h2 style="color:#e11d48; margin-top:0;">🚨 ACCOUNT BANNED</h2>
+    <p style="color:#475569; font-size:14px; line-height:1.5;">
+      <b>Auto-clicker software detected.</b><br/>Your account has been permanently excluded from the leaderboard.
+    </p>
+    <button class="btn-secondary" onclick="logout()">Exit</button>
+  </div>
+</div>
+
+<script>
+  const SERVERS = [
+    "https://website-with-database-click-counter.onrender.com",
+    "https://website-with-database-click-coun-git-6fb921-r4k1n-rashedujjaman.vercel.app/api/vercelbackend"
+  ];
+
+  let activeUser = null;
+  let isGuest = false;
+  let guestCount = 0n;
+  let pendingIdentifier = "";
+  let warningStep = 0;
+
+  // Handles Render cold-start (~50 sec delay)
+  async function apiCall(path, body = null, method = "POST") {
+    let wakingNotice = null;
+
+    for (const server of SERVERS) {
+      const controller = new AbortController();
+      // 55 seconds timeout for cold-booting servers
+      const timer = setTimeout(() => controller.abort(), 55000);
+
+      const slowWakeTimer = setTimeout(() => {
+        wakingNotice = notify("Waking up server from idle sleep... please wait ~30s", "info");
+      }, 3500);
+
+      try {
+        const isGet = method === "GET";
+        const isVercel = server.includes('vercelbackend');
+        const url = isGet 
+          ? (isVercel ? server : `${server}/api/users`)
+          : (isVercel ? server : `${server}/api/${path}`);
+
+        const payload = body ? { ...body, action: path } : { action: path };
+        const opts = { 
+          method: isGet ? "GET" : "POST", 
+          headers: { "Content-Type": "application/json" }, 
+          signal: controller.signal 
+        };
+        if (!isGet) opts.body = JSON.stringify(payload);
+
+        const res = await fetch(url, opts);
+        clearTimeout(timer);
+        clearTimeout(slowWakeTimer);
+
+        const data = await res.json();
+        return data;
+      } catch (err) {
+        clearTimeout(timer);
+        clearTimeout(slowWakeTimer);
+      }
+    }
+    return { error: "Network timeout or backend waking up. Please retry in a few seconds." };
+  }
+
+  function notify(msg, type = "info") {
+    const container = document.getElementById("toastContainer");
+    const el = document.createElement("div");
+    el.className = `toast toast-${type}`;
+    el.innerHTML = `<span>${type === 'error' ? '❌' : type === 'success' ? '🎉' : '✉️'}</span> <span>${msg}</span>`;
+    container.appendChild(el);
+    setTimeout(() => { 
+      el.style.opacity = "0"; 
+      setTimeout(() => el.remove(), 250); 
+    }, 4500);
+    return el;
+  }
+
+  function toggleAuth(showLogin) {
+    document.getElementById("loginGroup").classList.toggle("hidden", !showLogin);
+    document.getElementById("signupGroup").classList.toggle("hidden", showLogin);
+    document.getElementById("authTitle").innerText = showLogin ? "🔑 Login" : "✨ Create Account";
+  }
+
+  function backToRegister() {
+    document.getElementById("verifySection").classList.add("hidden");
+    document.getElementById("authSection").classList.remove("hidden");
+    toggleAuth(false);
+  }
+
+  async function register() {
+    const username = document.getElementById("regUsernameInput").value.trim().toLowerCase();
+    const email = document.getElementById("regEmailInput").value.trim().toLowerCase();
+    const password = document.getElementById("regPassInput").value.trim();
+    const flag = document.getElementById("countrySelect").value;
+
+    if (!username || !email || !password) return notify("Fill all fields + password!", "error");
+
+    document.getElementById("regBtn").innerText = "⏳ Sending Code...";
+    document.getElementById("regBtn").disabled = true;
+
+    const res = await apiCall("register", { username, email, password, flag });
+    
+    document.getElementById("regBtn").innerText = "🚀 Sign Up";
+    document.getElementById("regBtn").disabled = false;
+
+    if (res.error) return notify(res.error, "error");
+
+    notify("6-digit code sent to your email!", "info");
+    pendingIdentifier = email;
+    document.getElementById("authSection").classList.add("hidden");
+    document.getElementById("verifySection").classList.remove("hidden");
+  }
+
+  async function verifyCode() {
+    const code = document.getElementById("codeInput").value.trim();
+    if (!code) return notify("Enter code!", "error");
+
+    document.getElementById("verifyBtn").innerText = "⏳ Verifying...";
+    document.getElementById("verifyBtn").disabled = true;
+
+    const res = await apiCall("verify", { identifier: pendingIdentifier, code });
+    
+    document.getElementById("verifyBtn").innerText = "✅ Verify & Play";
+    document.getElementById("verifyBtn").disabled = false;
+
+    if (res.error) return notify(res.error, "error");
+
+    notify("Account verified!", "success");
+    activeUser = res.username;
+    launchApp(res.username, res.flag || "🏳️", res.score || "0");
+  }
+
+  async function login() {
+    const identifier = document.getElementById("loginIdInput").value.trim().toLowerCase();
+    const password = document.getElementById("loginPassInput").value.trim();
+
+    if (!identifier || !password) return notify("Enter username/email & password!", "error");
+
+    document.getElementById("loginBtn").innerText = "⏳ Logging in...";
+    document.getElementById("loginBtn").disabled = true;
+
+    const res = await apiCall("login", { identifier, password });
+    
+    document.getElementById("loginBtn").innerText = "🔑 Login";
+    document.getElementById("loginBtn").disabled = false;
+
+if (res.error) {
+      if (res.error.includes("banned")) {
+        document.getElementById("banOverlay").classList.add("active");
+      } else if (res.error.includes("verify your email")) {
+        pendingIdentifier = identifier;
+        document.getElementById("authSection").classList.add("hidden");
+        document.getElementById("verifySection").classList.remove("hidden");
+      }
+      return notify(res.error, "error");
+    }
+
+    notify("Welcome back!", "success");
+    activeUser = res.username;
+    launchApp(res.username, res.flag || "🏳️", res.score || "0");
+  }
+
+  function enterAsGuest() {
+    isGuest = true;
+    activeUser = null;
+    guestCount = 0n;
+    launchApp("Guest", "👤", "0");
+  }
+
+  function launchApp(name, flag, score) {
+    document.getElementById("authSection").classList.add("hidden");
+    document.getElementById("verifySection").classList.add("hidden");
+    document.getElementById("appSection").classList.remove("hidden");
+    document.getElementById("currentUser").innerText = name;
+    document.getElementById("userFlag").innerText = flag;
+    document.getElementById("counter").innerText = score;
+    loadLeaderboard();
+  }
+
+let clickQueue = 0n;
+let isSending = false;
+let leaderboardTimer = null;
+
+function handleClick() {
+  const counter = document.getElementById("counter");
+  counter.classList.add("counter-pop");
+  setTimeout(() => counter.classList.remove("counter-pop"), 50);
+
+  if (isGuest) {
+    guestCount += 1n;
+    counter.innerText = guestCount.toString();
+    return;
+  }
+
+  // 1. Instant 0ms visual update
+  counter.innerText = (BigInt(counter.innerText || "0") + 1n).toString();
+  clickQueue += 1n;
+
+  // 2. Dispatch sequential queue
+  processClickQueue();
+}
+
+async function processClickQueue() {
+  // Lock: never send overlapping requests to prevent database overwrites
+  if (isSending || clickQueue <= 0n) return;
+
+  isSending = true;
+
+  // Safe chunking: max 20 per request so anti-cheat never triggers
+  const countToSend = clickQueue > 20n ? 20n : clickQueue;
+  clickQueue -= countToSend;
+
+  try {
+    const res = await apiCall("click", { username: activeUser, count: countToSend.toString() });
+
+    if (res.error === "BANNED") {
+      document.getElementById("banOverlay").classList.add("active");
+    } else if (res.score) {
+      // Confirmed server score + whatever clicks you made while request was in transit
+      const verifiedTotal = BigInt(res.score) + clickQueue;
+      document.getElementById("counter").innerText = verifiedTotal.toString();
+
+      clearTimeout(leaderboardTimer);
+      leaderboardTimer = setTimeout(() => {
+        loadLeaderboard();
+      }, 1000);
+    } else if (res.error) {
+      // Refund clicks on network error so they never disappear
+      clickQueue += countToSend;
+      notify(res.error, "error");
+    }
+  } catch (e) {
+    clickQueue += countToSend;
+  } finally {
+    isSending = false;
+    // Immediately send remaining clicks if you clicked while request was traveling
+    if (clickQueue > 0n) {
+      processClickQueue();
+    }
+  }
+}
+
+  async function resendCode() {
+    const btn = document.getElementById("resendBtn");
+    btn.disabled = true;
+    btn.innerText = "⏳ Resending...";
+
+    const res = await apiCall("resend", { identifier: pendingIdentifier });
+    if (res.error) {
+      btn.disabled = false;
+      btn.innerText = "🔄 Resend Code";
+      return notify(res.error, "error");
+    }
+
+    notify("Fresh verification code sent to your email!", "success");
+
+    let cd = 45;
+    const timer = setInterval(() => {
+      btn.innerText = `Wait ${cd}s`;
+      cd--;
+      if (cd < 0) {
+        clearInterval(timer);
+        btn.disabled = false;
+        btn.innerText = "🔄 Resend Code";
+      }
+    }, 1000);
+  }
+
+  async function loadLeaderboard() {
+    const users = await apiCall("users", null, "GET");
+    if (!Array.isArray(users)) return;
+
+    const list = document.getElementById("rankingList");
+    list.innerHTML = "";
+    users.forEach(u => {
+      const li = document.createElement("li");
+      li.innerText = `${u.flag} ${u.name}: ${u.score}`;
+      list.appendChild(li);
+    });
+  }
+
+  const warnings = [
+    { title: "⚠️ Warning (1/3)", desc: "Reset your score to zero?", btn: "Continue" },
+    { title: "🚨 Warning (2/3)", desc: "All clicks will be erased permanently.", btn: "I Understand" },
+    { title: "🛑 Final Warning (3/3)", desc: "Last chance! This cannot be undone.", btn: "Reset to 0" }
+  ];
+
+  function openResetModal() { 
+    warningStep = 0; 
+    showStep(); 
+    document.getElementById("modalOverlay").classList.add("active"); 
+  }
+  
+  function closeResetModal() { 
+    document.getElementById("modalOverlay").classList.remove("active"); 
+  }
+
+  function showStep() {
+    document.getElementById("modalTitle").innerText = warnings[warningStep].title;
+    document.getElementById("modalDesc").innerText = warnings[warningStep].desc;
+    document.getElementById("modalConfirmBtn").innerText = warnings[warningStep].btn;
+  }
+
+  async function nextWarning() {
+    warningStep++;
+    if (warningStep < warnings.length) {
+      showStep();
+    } else {
+      closeResetModal();
+      if (isGuest) {
+        guestCount = 0n; 
+        document.getElementById("counter").innerText = "0";
+      } else {
+        document.getElementById("counter").innerText = "0";
+        await apiCall("reset", { username: activeUser });
+        loadLeaderboard(); 
+        notify("Score reset to 0", "info");
+      }
+    }
+  }
+
+  function logout() { 
+    location.reload(); 
+  }
+</script>
+
+</body>
+</html>
